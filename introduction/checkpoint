@@ -1,0 +1,2 @@
+model_checkpoint_path: "C:\\Python35\\dsc ml\\introduction/model.ckpt"
+all_model_checkpoint_paths: "C:\\Python35\\dsc ml\\introduction/model.ckpt"
