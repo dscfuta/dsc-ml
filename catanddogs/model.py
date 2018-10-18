@@ -1,90 +1,80 @@
 import tensorflow as tf
-import imagetotensor
+import pandas as pd
 import numpy as np
-import os
-from collections import deque
+
+dataset=pd.read_csv("C:\\Python35\\bootcamp1\\USA_Housing.csv")
+
+def ConvertToInt(column):
+    Dict={}
+    j=1
+    for i in column:
+        if i not in Dict:
+            Dict[i]=j
+            j+=1    
+    result=[]
+    for i in column:
+        result.append(Dict[i])
+    return result
+X=[];Y=[]
+
+col_y=dataset["Price"]
+
+for _ in range(len(dataset)):
+    Y.append(col_y[_])
+
+dataset["Address"]=ConvertToInt(dataset["Address"])
+
+dataset=dataset.drop(columns=["Price"])
+for _ in range(len(dataset)):
+    X.append(dataset.loc[_,:])
+
+X=np.asarray(X)
+print(X.shape)
+Y=np.reshape(np.asarray(Y),[-1,1])
+print(Y.shape)
+
+input=tf.placeholder(tf.float32,[None,6])
+pred=tf.placeholder(tf.float32,[None,1])
+layer1=tf.nn.relu(tf.layers.dense(input,64))
+layer2=tf.nn.relu(tf.layers.dense(layer1,64))
+output=tf.layers.dense(layer2,1)
+
+loss=tf.losses.mean_squared_error(pred,output)
+
+train=tf.train.RMSPropOptimizer(0.01).minimize(loss,
+                                                global_step=tf.train.get_global_step())
+
+from random import randint
 
 
-#THE Number of layer of our intented network
-LAYERS=4
-BATCHES=5
+saver=tf.train.Saver()
+with tf.Session() as sess:
+    tf.global_variables_initializer().run()
+    batch=10
+    epoch=3
+    for _ in range(epoch):
+        total_loss=0
+        print("training on batch "+str(_+1))
+        for data in range(len(dataset)):
+            niner=[randint(0,5000-1) for i in range(9)]
+            X_to_feed=[X[data]]+[X[niner[i]] for i in range(9)]
+            Y_to_feed=[Y[data]]+[Y[niner[i]] for i in range(9)]
 
-def main():
-    inputBatch=tf.placeholder(tf.float32, [None, 50,50,3],name="input")
-    print(inputBatch.shape)
-    layers=deque([inputBatch])
-    filters=[32,64,128,128]
-    for _ in range(LAYERS):
-        #The covulutional layer of our network
-        conv = tf.layers.conv2d(
-            inputs=layers[-1],
-            filters=filters[_], #Filters define the number of network parameter to learn
-            kernel_size=[3, 3], #kernel_size define the size of a convulution 
-            padding="valid",
-            activation=tf.nn.relu,
-            name="conv"+str(_))
+            loss_,train_=sess.run([loss,train],feed_dict={
+                input:X_to_feed,
+                pred:Y_to_feed
+            })
+            total_loss+=loss_
+        print(total_loss)
+    Y_pred=sess.run(output,feed_dict={input:X})
+
+    for i in range(20):
+        print(Y_pred[i],Y[i])
+    error=0
+    for i in range(len(Y_pred)):
+        error+=abs(Y[i][0]-Y_pred[i][0])
+    print(error)
     
-        pool = tf.layers.max_pooling2d(inputs=conv, pool_size=[2, 2], strides=2,name="pool"+str(_))
-        print(conv.shape,pool.shape)
-        layers.append(pool)
-        layers.popleft()
-        
-    reshape=tf.reshape(layers[-1],[-1,128],name="reshapelayer")
-    dense=tf.layers.dense(reshape,50,name="dense", activation=tf.nn.relu)
-    output=tf.layers.dense(dense,1,name="finaloutput",activation=tf.sigmoid)
-    print(output.shape)
-        
-    prediction = tf.placeholder(tf.float32, [None,1])
-    print(prediction.shape)
-
-    #loss
-    loss = tf.reduce_mean(tf.abs(output-prediction))
-    train_step = tf.train.GradientDescentOptimizer(learning_rate=1).minimize(loss)
-
-    saver=tf.train.Saver()
-
-    print("fetching image  ")
-    INPUTTRAIN=imagetotensor.getTrainbatch()
-    catimage,dogimage,catprediction,dogprediction=INPUTTRAIN
-    
-    lengthofdata=len(catimage) #the length of the data
-    numberofbatch=lengthofdata//BATCHES #the number of batches
-
-
-    catprediction=np.reshape(catprediction,[-1,1])
-    dogprediction=np.reshape(dogprediction,[-1,1])
-    
-    print("Sessoion starting")
-    
-    with tf.Session() as sess:
-        tf.initialize_all_variables().run()
-        cat_or_dog=True #true to use the cat image false to use the dog image
-        for _ in range(BATCHES):
-            print("training on "+str(_)+" batch ")
-            if cat_or_dog:
-                train_train=sess.run(train_step,feed_dict={inputBatch:
-                            catimage[_*numberofbatch:_*numberofbatch+numberofbatch],
-                            prediction: catprediction[_*numberofbatch:_*numberofbatch+numberofbatch]})
-                cat_or_dog=not cat_or_dog
-            else:
-                train_train=sess.run(train_step,feed_dict={inputBatch:
-                            dogimage[_*numberofbatch:_*numberofbatch+numberofbatch],
-                            prediction: dogprediction[_*numberofbatch:_*numberofbatch+numberofbatch]})
-                cat_or_dog=not cat_or_dog
-            saver.save(sess,os.getcwd()+"/modelsave/modelsave")
-
-        #Testing the model
-        batchToTest=1
-        correct_prediction = tf.equal(output,prediction)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-        print(sess.run(accuracy, feed_dict={inputBatch:
-                            catimage[batchToTest*numberofbatch:batchToTest*numberofbatch+numberofbatch],
-                            prediction: catprediction[batchToTest*numberofbatch:batchToTest*numberofbatch+numberofbatch]}))
-                              #prints the accuracy to the console
-    
-       
-
-
-
-if __name__=="__main__":
-    main()
+    import os
+    saver.save(sess,os.getcwd())
+ 
